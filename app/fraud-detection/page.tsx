@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { ArrowLeft, Calendar, Download, Filter, Info, AlertTriangle } from "lucide-react"
+import { AnomalyVisualization } from "@/components/anomaly-visualization"
 import Link from "next/link"
 
 import { Button } from "@/components/ui/button"
@@ -167,46 +168,13 @@ export default function FraudDetectionPage() {
                 <CardDescription>Geographic distribution of verification attempts and failures</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="aspect-[16/9] overflow-hidden rounded-md border">
-                  <div className="relative h-full w-full bg-[#f0f0f0]">
-                    {/* Simulated heatmap visualization */}
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <img
-                        src="/placeholder.svg?height=400&width=800"
-                        alt="Verification Heatmap"
-                        className="h-full w-full object-cover"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 via-yellow-500/20 to-red-500/20"></div>
-
-                      {/* Hotspots */}
-                      <div className="absolute left-[30%] top-[40%] h-16 w-16 rounded-full bg-red-500/30 animate-pulse"></div>
-                      <div
-                        className="absolute left-[60%] top-[30%] h-12 w-12 rounded-full bg-yellow-500/40 animate-pulse"
-                        style={{ animationDelay: "0.5s" }}
-                      ></div>
-                      <div
-                        className="absolute left-[45%] top-[60%] h-10 w-10 rounded-full bg-yellow-500/30 animate-pulse"
-                        style={{ animationDelay: "1s" }}
-                      ></div>
-
-                      {/* Legend */}
-                      <div className="absolute bottom-4 right-4 flex items-center gap-2 rounded-md bg-white/90 p-2 text-xs">
-                        <div className="flex items-center gap-1">
-                          <div className="h-3 w-3 rounded-full bg-blue-500/70"></div>
-                          <span>Low</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="h-3 w-3 rounded-full bg-yellow-500/70"></div>
-                          <span>Medium</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <div className="h-3 w-3 rounded-full bg-red-500/70"></div>
-                          <span>High</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <AnomalyVisualization
+                  data={[
+                    { x: 30, y: 40, intensity: 0.8, type: "multiple_attempt" },
+                    { x: 60, y: 30, intensity: 0.6, type: "biometric_mismatch" },
+                    { x: 45, y: 60, intensity: 0.4, type: "unusual_pattern" }
+                  ]}
+                />
 
                 <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
                   <div className="rounded-md border p-3">
@@ -235,10 +203,39 @@ export default function FraudDetectionPage() {
           </TabsContent>
 
           <TabsContent value="patterns" className="mt-6">
-            <Card>
+            <AnomalyVisualization
+              patterns={[
+                {
+                  timestamp: Date.now(),
+                  location: "West Zone",
+                  deviceId: "A7F892",
+                  verificationAttempts: 17,
+                  voterIds: ["V1042", "V1043", "V1044", "V1045", "V1046"]
+                },
+                {
+                  timestamp: Date.now() - 900000, // 15 minutes ago
+                  location: "East Zone",
+                  deviceId: "B2C456",
+                  verificationAttempts: 8,
+                  voterIds: ["V1047", "V1048", "V1049"]
+                },
+                {
+                  timestamp: Date.now() - 1800000, // 30 minutes ago
+                  location: "North Zone",
+                  deviceId: "D9E123",
+                  verificationAttempts: 12,
+                  voterIds: ["V1050", "V1051", "V1052", "V1053"]
+                }
+              ]}
+              onInvestigate={(pattern) => {
+                console.log("Investigating pattern:", pattern);
+                // TODO: Implement investigation dialog
+              }}
+            />
+            <Card className="mt-6">
               <CardHeader>
-                <CardTitle>Unusual Verification Patterns</CardTitle>
-                <CardDescription>Detected patterns that may indicate organized fraud attempts</CardDescription>
+                <CardTitle>Historical Patterns</CardTitle>
+                <CardDescription>Previously detected patterns that may indicate organized fraud attempts</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">

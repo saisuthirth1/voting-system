@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
+import { GoogleGenerativeAI } from "@google/generative-ai"
 import { Paperclip, Send, Video, X } from "lucide-react"
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -38,41 +39,120 @@ export function SupportChat({ isOpen, onClose }: SupportChatProps) {
   const [activeTab, setActiveTab] = useState("chat")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when new messages arrive
+  // Auto-scroll to bottom when new messages arrive, but only if user is already at the bottom
+  const [shouldAutoScroll, setShouldAutoScroll] = useState(true)
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
-  }, [messages])
+    // Only auto-scroll if the user is already at or near the bottom
+    if (shouldAutoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+    }
+    
+    // Force an initial scroll to bottom when chat is first opened
+    if (messages.length === 1) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
+      }, 100)
+    }
+  }, [messages, shouldAutoScroll])
+  
+  // Check scroll position to determine if auto-scroll should be enabled
+  const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    if (target) {
+      const { scrollTop, scrollHeight, clientHeight } = target;
+      // If user is within 150px of the bottom, enable auto-scroll
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+      setShouldAutoScroll(isNearBottom);
+    }
+  }
+  
+  // Force scroll to bottom when chat is opened
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "auto" })
+        setShouldAutoScroll(true)
+      }, 300)
+    }
+  }, [isOpen])
 
-  // Simulate support agent typing
+  // Initialize Gemini AI
+  const genAI = new GoogleGenerativeAI("AIzaSyCJGr5HVkZxmCbNL6AS4kutuOw32oHvkjs")
+  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" })
+
+  // Handle AI chat responses
   useEffect(() => {
     let typingTimeout: NodeJS.Timeout
 
-    if (messages.length > 0 && messages[messages.length - 1].sender === "user") {
-      setIsTyping(true)
+    const getAIResponse = async (userMessage: string) => {
+      try {
+        // Format chat history for Gemini API
+        // The API requires that if history is provided, the first message must have a 'user' role
+        let chatHistory = [];
+        
+        if (messages.length > 1) {
+          // Convert our messages to Gemini format
+          const formattedMessages = messages.slice(0, -1).map(msg => ({
+            role: msg.sender === "user" ? "user" : "model",
+            parts: [{ text: msg.content }],
+          }));
+          
+          // Ensure the first message is always from a user
+          if (formattedMessages.length > 0) {
+            if (formattedMessages[0].role === "model") {
+              // If the first message is from the model, add a dummy user message before it
+              chatHistory = [
+                { role: "user", parts: [{ text: "Hello" }] },
+                ...formattedMessages
+              ];
+            } else {
+              // If first message is already from user, use the formatted messages as is
+              chatHistory = formattedMessages;
+            }
+          }
+        }
+          
+        const chat = model.startChat({
+          history: chatHistory,
+        })
 
-      typingTimeout = setTimeout(() => {
-        const responses = [
-          "I understand your issue. Let me help you with that.",
-          "Have you tried restarting the verification device?",
-          "I can see your polling station. Let me check the system status.",
-          "The fingerprint scanner might need recalibration. I'll guide you through the process.",
-          "Let me connect you with our technical specialist who can help resolve this issue.",
-        ]
-
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)]
+        const result = await chat.sendMessage(userMessage)
+        const response = await result.response
+        const text = response.text()
 
         setMessages((prev) => [
           ...prev,
           {
             id: Date.now(),
-            content: randomResponse,
+            content: text,
             sender: "support",
             timestamp: new Date(),
           },
         ])
-
+      } catch (error) {
+        console.error("Error getting AI response:", error)
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now(),
+            content: "I apologize, but I'm having trouble connecting right now. Please try again later.",
+            sender: "support",
+            timestamp: new Date(),
+          },
+        ])
+      } finally {
         setIsTyping(false)
-      }, 2000)
+      }
+    }
+
+    if (messages.length > 0 && messages[messages.length - 1].sender === "user") {
+      setIsTyping(true)
+      const userMessage = messages[messages.length - 1].content
+      typingTimeout = setTimeout(() => {
+        getAIResponse(userMessage)
+      }, 1000)
     }
 
     return () => clearTimeout(typingTimeout)
@@ -102,14 +182,25 @@ export function SupportChat({ isOpen, onClose }: SupportChatProps) {
 
   if (!isOpen) return null
 
+  // Function to handle clicks outside the chat box
+  const handleOverlayClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Only close if the click is directly on the overlay, not on the chat box
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <Card className="w-full max-w-md h-[600px] flex flex-col">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={handleOverlayClick}
+    >
+      <Card className="w-full max-w-md h-[600px] flex flex-col overflow-hidden">
         <CardHeader className="border-b px-4 py-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src="/placeholder.svg?height=32&width=32" alt="Support Agent" />
+                <AvatarImage src="/chatbotimage.png" alt="Support Agent" />
                 <AvatarFallback>TS</AvatarFallback>
               </Avatar>
               <CardTitle className="text-lg">Technical Support</CardTitle>
@@ -129,10 +220,13 @@ export function SupportChat({ isOpen, onClose }: SupportChatProps) {
 
           <TabsContent
             value="chat"
-            className="flex-1 flex flex-col data-[state=active]:flex data-[state=inactive]:hidden"
+            className="flex-1 flex flex-col data-[state=active]:flex data-[state=inactive]:hidden overflow-hidden"
           >
-            <ScrollArea className="flex-1 p-4">
-              <div className="space-y-4">
+            <ScrollArea 
+              className="flex-1 p-4" 
+              onScroll={handleScroll}
+              ref={scrollAreaRef}>
+              <div className="space-y-4 w-full flex flex-col">
                 {messages.map((message) => (
                   <div
                     key={message.id}
@@ -173,7 +267,7 @@ export function SupportChat({ isOpen, onClose }: SupportChatProps) {
               </div>
             </ScrollArea>
 
-            <CardFooter className="border-t p-4">
+            <CardFooter className="border-t p-4 min-h-[80px] flex-shrink-0">
               <div className="flex w-full items-center gap-2">
                 <Button variant="outline" size="icon" className="shrink-0">
                   <Paperclip className="h-5 w-5" />
@@ -202,9 +296,14 @@ export function SupportChat({ isOpen, onClose }: SupportChatProps) {
               <Video className="mx-auto h-16 w-16 text-muted-foreground" />
               <h3 className="mt-4 text-xl font-bold">Start Video Call</h3>
               <p className="mt-2 text-muted-foreground">
-                Connect with a technical support specialist via video for visual troubleshooting
+                Connect with a technical support specialist via video
               </p>
-              <Button className="mt-4">Start Video Call</Button>
+              <Button
+                className="mt-4"
+                onClick={() => window.open('https://meet.google.com/new', '_blank')}
+              >
+                Start Video Call
+              </Button>
             </div>
           </TabsContent>
         </Tabs>

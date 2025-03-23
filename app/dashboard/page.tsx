@@ -1,18 +1,42 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { VoterDetailDialog } from "@/components/voter-detail-dialog"
 import { AlertTriangle, BarChart, Clock, Fingerprint, Mic, Shield, Users } from "lucide-react"
 import Link from "next/link"
+import { indianNames, getRandomName } from "@/lib/names"
 
 import { LanguageSelector } from "@/components/language-selector"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { StatCard } from "@/components/stat-card"
-import { VerificationModeToggle } from "@/components/verification-mode-toggle"
 import { VotingChart } from "@/components/voting-chart"
+import { ConstitutionListDialog } from "@/components/constitution-list-dialog"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardPage() {
-  const [verificationMode, setVerificationMode] = useState<"standard" | "enhanced">("standard")
+  const [showConstitutionList, setShowConstitutionList] = useState(false)
+  const [recentNames, setRecentNames] = useState<string[]>([])
+
+  useEffect(() => {
+    // Generate stable list of names on mount with fixed indices
+    const names = Array(5).fill(null).map((_, index) => {
+      // Use index as a stable seed for name generation
+      const stableIndex = index % indianNames.length
+      return indianNames[stableIndex]
+    })
+    setRecentNames(names)
+  }, [])
+  const [selectedVoter, setSelectedVoter] = useState<{
+    id: number
+    name: string
+    voterId: string
+    verificationStatus: string
+    verificationTime: string
+    manualCheckReason?: string
+    boothNumber: number
+    aadhaarLastDigits: string
+  } | null>(null)
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -21,6 +45,7 @@ export default function DashboardPage() {
           <h1 className="text-2xl font-bold">Voting Verification System</h1>
           <div className="flex items-center gap-4">
             <LanguageSelector />
+            <ThemeToggle />
             <Button variant="outline" onClick={() => (window.location.href = "/login")}>
               Logout
             </Button>
@@ -34,7 +59,9 @@ export default function DashboardPage() {
             <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
             <p className="text-muted-foreground">Monitor verification statistics and manage voter verification</p>
           </div>
-          <VerificationModeToggle value={verificationMode} onValueChange={setVerificationMode} />
+          <Button variant="outline" onClick={() => setShowConstitutionList(true)} className="bg-black text-white hover:bg-black/90">
+            Original Constitution List
+          </Button>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -95,19 +122,37 @@ export default function DashboardPage() {
             <CardContent>
               <div className="space-y-4">
                 {[...Array(5)].map((_, i) => (
-                  <div key={i} className="flex items-center justify-between border-b pb-2 last:border-0">
-                    <div>
-                      <p className="font-medium">Voter #{1248 - i}</p>
+                    <div key={i} className="flex items-center justify-between border-b pb-2 last:border-0">
+                      <div>
+                        <p className="font-medium">{recentNames[i] || "Loading..."}</p>
                       <p className="text-sm text-muted-foreground">
                         {new Date(Date.now() - i * 5 * 60000).toLocaleTimeString()}
                       </p>
                     </div>
-                    <div
-                      className={`rounded-full px-2 py-1 text-xs font-medium ${
-                        i === 2 ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"
-                      }`}
-                    >
-                      {i === 2 ? "Manual Check" : "Verified"}
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`rounded-full px-2 py-1 text-xs font-medium ${
+                          i === 2 ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"
+                        }`}
+                      >
+                        {i === 2 ? "Manual Check" : "Verified"}
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setSelectedVoter({
+                          id: 1248 - i,
+                          name: recentNames[i] || "Loading...",
+                          voterId: `V${1248 - i}`,
+                          verificationStatus: i === 2 ? "manual_check" : "verified",
+                          verificationTime: new Date(Date.now() - i * 5 * 60000).toISOString(),
+                          manualCheckReason: i === 2 ? "Fingerprint mismatch" : undefined,
+                          boothNumber: Math.floor(Math.random() * 10) + 1,
+                          aadhaarLastDigits: Math.floor(Math.random() * 10000).toString().padStart(4, "0"),
+                        })}
+                      >
+                        View
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -166,6 +211,7 @@ export default function DashboardPage() {
           </Card>
         </div>
 
+        <ConstitutionListDialog isOpen={showConstitutionList} onClose={() => setShowConstitutionList(false)} />
         <div className="mt-8 flex flex-wrap gap-4">
           <Button size="lg" onClick={() => (window.location.href = "/verify")}>
             Start New Verification
@@ -183,6 +229,12 @@ export default function DashboardPage() {
           </Link>
         </div>
       </main>
+
+      <VoterDetailDialog
+        isOpen={selectedVoter !== null}
+        onClose={() => setSelectedVoter(null)}
+        voter={selectedVoter}
+      />
     </div>
   )
 }
